@@ -369,6 +369,93 @@ class FoodClassifier:
         
         return predicted_class, confidence_score
 
+    def evaluate_model(self, dataset_type='val'):
+        """
+        Evaluate model accuracy and generate confusion matrix
+        
+        Args:
+            dataset_type: 'val' or 'train'
+        """
+        import seaborn as sns
+        from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+        
+        self.model.eval()
+        all_preds = []
+        all_labels = []
+        
+        loader = self.val_loader if dataset_type == 'val' else self.train_loader
+        dataset = self.val_dataset if dataset_type == 'val' else self.train_dataset
+        
+        print(f"\nEvaluating on {dataset_type} set...")
+        
+        with torch.no_grad():
+            for inputs, labels in tqdm(loader, desc='Evaluating'):
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                outputs = self.model(inputs)
+                _, predicted = torch.max(outputs, 1)
+                
+                all_preds.extend(predicted.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+        
+        all_preds = np.array(all_preds)
+        all_labels = np.array(all_labels)
+        
+        # Overall accuracy
+        accuracy = accuracy_score(all_labels, all_preds) * 100
+        print(f"\nOverall Accuracy: {accuracy:.2f}%")
+        
+        # Per-class report
+        print("\nClassification Report:")
+        print(classification_report(all_labels, all_preds, target_names=self.class_names))
+        
+        # Confusion matrix
+        cm = confusion_matrix(all_labels, all_preds)
+        
+        # Plot confusion matrix
+        fig, axes = plt.subplots(1, 2, figsize=(20, 8))
+        
+        # Raw counts
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                    xticklabels=self.class_names,
+                    yticklabels=self.class_names,
+                    ax=axes[0])
+        axes[0].set_title(f'Confusion Matrix (Counts)\nAccuracy: {accuracy:.2f}%')
+        axes[0].set_ylabel('True Label')
+        axes[0].set_xlabel('Predicted Label')
+        axes[0].tick_params(axis='x', rotation=45)
+        axes[0].tick_params(axis='y', rotation=0)
+        
+        # Normalized (percentages per true class)
+        cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis] * 100
+        sns.heatmap(cm_normalized, annot=True, fmt='.1f', cmap='Blues',
+                    xticklabels=self.class_names,
+                    yticklabels=self.class_names,
+                    ax=axes[1])
+        axes[1].set_title('Confusion Matrix (% per True Class)')
+        axes[1].set_ylabel('True Label')
+        axes[1].set_xlabel('Predicted Label')
+        axes[1].tick_params(axis='x', rotation=45)
+        axes[1].tick_params(axis='y', rotation=0)
+        
+        plt.tight_layout()
+        save_path = f'confusion_matrix_{dataset_type}.png'
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"\nConfusion matrix saved to {save_path}")
+        plt.close()
+        
+        # Print most confused pairs
+        cm_no_diag = cm.copy()
+        np.fill_diagonal(cm_no_diag, 0)
+        top_confused = np.dstack(np.unravel_index(np.argsort(cm_no_diag.ravel())[::-1], cm.shape))[0]
+        
+        print("\nTop 5 Most Confused Class Pairs:")
+        for i, (true_idx, pred_idx) in enumerate(top_confused[:5]):
+            count = cm[true_idx, pred_idx]
+            if count > 0:
+                print(f"  {i+1}. True: '{self.class_names[true_idx]}' → Predicted: '{self.class_names[pred_idx]}' ({count} times)")
+        
+        return accuracy, cm
+
 
 # Example usage
 if __name__ == "__main__":
@@ -381,34 +468,26 @@ if __name__ == "__main__":
     # classifier = FoodClassifier(
     #     data_dir=DATA_DIR,
     #     batch_size=32,
-    #     learning_rate=0.0001,
+    #     learning_rate=0.001,
     #     num_epochs=10
     # )
     
     # ========================================
     # Option 2: Continue training from existing model
     # ========================================
+    #classifier = FoodClassifier(
+        #data_dir=DATA_DIR,
+        #batch_size=32,
+        ##learning_rate=0.000001,
+        #num_epochs=2,
+        #load_model_path="food_classifier_final.pth"  # Model to continue from
+    #)
+
     classifier = FoodClassifier(
         data_dir=DATA_DIR,
         batch_size=32,
         learning_rate=0.000001,
-        num_epochs=2,
-        load_model_path="food_classifier_final.pth"  # Model to continue from
-    )
-    
-    # Train the model (will continue from checkpoint if loaded)
-    classifier.train()
-    
-    # Plot training history
-    classifier.plot_training_history('training_history.png')
-    
-    # Save the final model
-    classifier.save_model('food_classifier_final.pth')
-    
-    print("\nModel training complete!")
-    print(f"Best model saved as: best_model.pth")
-    print(f"Final model saved as: food_classifier_final.pth")
-    
-    # Example: Make a prediction on a new image
-    # predicted_class, confidence = classifier.predict('/path/to/test/image.jpg')
-    # print(f"\nPrediction: {predicted_class} (Confidence: {confidence:.2f}%)")
+        num_epochs=0,  # 0 epochs = no training, just evaluate
+        load_model_path="food_classifier_final.pth"
+    )   
+

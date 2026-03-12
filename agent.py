@@ -2,7 +2,7 @@ from groq import Groq
 import pandas as pd
 from nutrition_predictor import NutritionPredictor
 
-GROQ_API_KEY = "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"  # from console.groq.com
+GROQ_API_KEY = "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"
 
 
 class FoodAgent:
@@ -11,7 +11,6 @@ class FoodAgent:
         self.client = Groq(api_key=GROQ_API_KEY)
         self.max_recipes = max_recipes
 
-        # Load recipes
         df = pd.read_csv(recipes_csv)
         df['ingredients_list'] = df['ingredients'].apply(
             lambda x: [i.strip().lower() for i in x.split(',')]
@@ -37,8 +36,7 @@ class FoodAgent:
         food, confidence, serving, calories = self.predictor.predict(image_path)
 
         # Step 2: Find matching recipes
-        food_terms = [food] + food.split()
-        matches = self.find_recipes(food_terms, max_recipes=max_recipes)
+        matches = self.find_recipes(food, max_recipes=max_recipes)
 
         if matches.empty:
             recipes_text = "No recipes found for this ingredient."
@@ -61,7 +59,7 @@ Here are {len(matches)} recipes from my database that include this ingredient:
 
 Please give a short, friendly summary of:
 1. The nutritional value of {food}
-2. A brief highlight of each recipe and which would suit different occasions    (quick weeknight meal, special dinner, healthy option, etc.)
+2. A brief highlight of each recipe and which would suit different occasions (quick weeknight meal, special dinner, healthy option, etc.)
 Keep it concise and practical."""
 
         completion = self.client.chat.completions.create(
