@@ -2,7 +2,7 @@ from groq import Groq
 import pandas as pd
 from nutrition_predictor import NutritionPredictor
 
-GROQ_API_KEY = "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"
+GROQ_API_KEY = ""
 
 
 class FoodAgent:
